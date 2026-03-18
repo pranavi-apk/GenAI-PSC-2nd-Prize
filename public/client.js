@@ -2980,7 +2980,9 @@ window.openPinyinToneModal = (syllable) => {
     let gridHtml = '';
     for (let i = 1; i <= 4; i++) {
         let toneSyllable = applyTone(syllable, i);
-        gridHtml += `<button class="tone-modal-btn" onclick="playPronunciation('${toneSyllable}', 0.85, VOICE_MAP.female)">
+        let repChar = (window.PINYIN_MAP && window.PINYIN_MAP[toneSyllable]) ? window.PINYIN_MAP[toneSyllable] : toneSyllable;
+        
+        gridHtml += `<button class="tone-modal-btn" onclick="playPronunciation('${repChar}', 0.85, VOICE_MAP.female)">
                         ${toneSyllable}
                         <span class="tone-num">Tone ${i}</span>
                      </button>`;
