@@ -22,27 +22,50 @@ const PIXABAY_KEY = process.env.PIXABAY_KEY; // pixabay.com/api
 // ─── Google Cloud TTS Config ─────────────────────────────────────────────────
 const GOOGLE_TTS_KEY = process.env.GOOGLE_TTS_KEY;
 
-// ─── Azure OpenAI Config ───────────────────────────────────────────────────
-const AZURE_CONFIG = {
-    endpoint: process.env.AZURE_ENDPOINT,
-    apiKey: process.env.AZURE_API_KEY,
-    apiVersion: '2025-01-01-preview',
-    deployment: 'gpt-5-chat-2'
-};
+// ─── Vertex AI Config ───────────────────────────────────────────────────
+const VERTEX_API_KEY = process.env.VERTEX_API_KEY || 'AQ.Ab8RN6KYPk4bYMBzY7prcUWmD07QviDmbHLQ2amd-XAhAtq49Q';
+const VERTEX_URL = `https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models/gemini-2.5-flash:generateContent?key=${VERTEX_API_KEY}`;
 
 async function callAzureOpenAI(messages, maxTokens = 600) {
-    const url = `${AZURE_CONFIG.endpoint}openai/deployments/${AZURE_CONFIG.deployment}/chat/completions?api-version=${AZURE_CONFIG.apiVersion}`;
-    const body = JSON.stringify({ messages, max_tokens: maxTokens, temperature: 0.85 });
+    let systemInstruction = null;
+    let contents = [];
+    
+    for (const msg of messages) {
+        if (msg.role === 'system') {
+            systemInstruction = { parts: [{ text: msg.content }] };
+        } else {
+            contents.push({ role: msg.role === 'assistant' ? 'model' : 'user', parts: [{ text: msg.content }] });
+        }
+    }
+
+    const payload = {
+        contents,
+        generationConfig: { maxOutputTokens: maxTokens, temperature: 0.85 }
+    };
+    if (systemInstruction) {
+        payload.systemInstruction = systemInstruction;
+    }
+
+    const body = JSON.stringify(payload);
+    
     return new Promise((resolve, reject) => {
-        const req = https.request(url, {
+        const req = https.request(VERTEX_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'api-key': AZURE_CONFIG.apiKey }
+            headers: { 'Content-Type': 'application/json' }
         }, (res) => {
             let data = '';
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
-                try { resolve(JSON.parse(data).choices[0].message.content); }
-                catch (e) { reject(new Error('Parse error: ' + data)); }
+                try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.error) {
+                        return reject(new Error('Vertex Error: ' + parsed.error.message));
+                    }
+                    const answer = parsed.candidates[0].content.parts[0].text;
+                    resolve(answer);
+                } catch (e) { 
+                    reject(new Error('Parse error: ' + data)); 
+                }
             });
         });
         req.on('error', reject);
@@ -107,7 +130,7 @@ Incorporate these specific sounds frequently into the generated content.
         }
     ];
     const isLongSection = section === 'lang_du';
-    const tokenLimit = isLongSection ? 1200 : 450;
+    const tokenLimit = 4000;
 
     try {
         const raw = await callAzureOpenAI(messages, tokenLimit);
