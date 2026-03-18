@@ -2980,9 +2980,15 @@ window.openPinyinToneModal = (syllable) => {
     let gridHtml = '';
     for (let i = 1; i <= 4; i++) {
         let toneSyllable = applyTone(syllable, i);
-        let repChar = (window.PINYIN_MAP && window.PINYIN_MAP[toneSyllable]) ? window.PINYIN_MAP[toneSyllable] : toneSyllable;
+        let repChar = (window.PINYIN_MAP && window.PINYIN_MAP[toneSyllable]) ? window.PINYIN_MAP[toneSyllable] : '字';
         
-        gridHtml += `<button class="tone-modal-btn" onclick="playPronunciation('${repChar}', 0.85, VOICE_MAP.female)">
+        // Use SSML with explicit phoneme tag to force correct tone playback, 
+        // avoiding issues with multi-phonic (多音字) characters defaulting to wrong tones.
+        let phStr = syllable.replace('v', 'ü') + i;
+        let ssml = `<speak><phoneme alphabet="pinyin" ph="${phStr}">${repChar}</phoneme></speak>`;
+        let encodedSsml = ssml.replace(/"/g, '&quot;');
+
+        gridHtml += `<button class="tone-modal-btn" onclick="playPronunciation('${encodedSsml}', 0.85, VOICE_MAP.female)">
                         ${toneSyllable}
                         <span class="tone-num">Tone ${i}</span>
                      </button>`;

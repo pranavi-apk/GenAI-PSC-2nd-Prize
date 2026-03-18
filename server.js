@@ -405,8 +405,9 @@ app.post('/api/tts', async (req, res) => {
     if (!text) return res.status(400).json({ error: 'Missing text' });
 
     const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_TTS_KEY}`;
+    const inputPayload = text.startsWith('<speak>') ? { ssml: text } : { text };
     const body = JSON.stringify({
-        input: { text },
+        input: inputPayload,
         voice: { languageCode: 'cmn-CN', name: voice },
         audioConfig: { audioEncoding: 'MP3', speakingRate: rate }
     });
