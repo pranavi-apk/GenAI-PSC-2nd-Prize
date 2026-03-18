@@ -878,6 +878,32 @@ window.playIflytekPronunciation = async (text, voice = 'xiaoyan', speed = 50, vo
     }
 };
 
+// Play a pre-recorded MP3 from the bundled pinyin audio repo.
+// Falls back to iFlyTek TTS if the static file is missing.
+window.playStaticPinyin = async (audioKey, syllable, tone) => {
+    if (currentTTSAudio) {
+        currentTTSAudio.pause();
+        currentTTSAudio = null;
+    }
+    const url = `/audio/pinyin/${audioKey}.mp3`;
+    try {
+        // Use HEAD request to check if file exists before playing, otherwise fall back
+        const check = await fetch(url, { method: 'HEAD' });
+        if (check.ok) {
+            currentTTSAudio = new Audio(url);
+            currentTTSAudio.play();
+        } else {
+            throw new Error('Static file not found');
+        }
+    } catch (e) {
+        // Fallback: use iFlyTek TTS
+        console.log(`No static MP3 for ${audioKey}, falling back to iFlyTek`);
+        const repChar = (window.PINYIN_MAP && window.PINYIN_MAP[syllable + tone]) ? window.PINYIN_MAP[syllable + tone] : '字';
+        const phStr = syllable + tone;
+        playIflytekPronunciation(`[=${phStr}]${repChar}`, 'xiaoyan', 35);
+    }
+};
+
 // ─── WAV Encoder ──────────────────────────────────────────────────────────
 function encodeWAV(samples, sampleRate) {
     const buffer = new ArrayBuffer(44 + samples.length * 2);
@@ -3016,14 +3042,10 @@ window.openPinyinToneModal = (syllable) => {
     let gridHtml = '';
     for (let i = 1; i <= 4; i++) {
         let toneSyllable = applyTone(syllable, i);
-        let repChar = (window.PINYIN_MAP && window.PINYIN_MAP[toneSyllable]) ? window.PINYIN_MAP[toneSyllable] : '字';
-        
-        // iFLYTEK WebAPI TTS syntax for enforcing pronunciation: [=pinyin]character
-        // Use 'v' instead of 'ü' for the phonetic string as it's more standard for computer pinyin input.
-        let phStr = syllable + i;
-        let iflytekText = `[=${phStr}]${repChar}`;
-
-        gridHtml += `<button class="tone-modal-btn" onclick="playIflytekPronunciation('${iflytekText}', 'xiaoyan', 35)">
+        // Map 'v' finals to audio file naming convention:
+        // jv,qv,xv -> ju,qu,xu; lv,nv -> lü,nü (use iFlyTek fallback)
+        let audioKey = syllable.replace(/^([jqx])v/, '$1u') + i;
+        gridHtml += `<button class="tone-modal-btn" onclick="playStaticPinyin('${audioKey}', '${syllable}', ${i})">
                         ${toneSyllable}
                         <span class="tone-num">Tone ${i}</span>
                      </button>`;
