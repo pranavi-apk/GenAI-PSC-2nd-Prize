@@ -842,6 +842,42 @@ window.playPronunciation = async (text, rate = 0.85, voice = STATE.voice) => {
     }
 };
 
+window.playIflytekPronunciation = async (text, voice = 'xiaoyan') => {
+    if (!text) return;
+    if (currentTTSAudio) {
+        currentTTSAudio.pause();
+        currentTTSAudio = null;
+    }
+    const cacheKey = `iflytek|${text}|${voice}`;
+    try {
+        let audioB64;
+        if (ttsCache[cacheKey]) {
+            audioB64 = ttsCache[cacheKey];
+        } else {
+            const res = await fetch('/api/iflytek-tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, voice })
+            });
+            const data = await res.json();
+            if (!data.audioContent) throw new Error('No audio content returned');
+            ttsCache[cacheKey] = data.audioContent;
+            audioB64 = data.audioContent;
+        }
+
+        const binary = atob(audioB64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'audio/mp3' });
+        const url = URL.createObjectURL(blob);
+        currentTTSAudio = new Audio(url);
+        currentTTSAudio.onended = () => URL.revokeObjectURL(url);
+        currentTTSAudio.play();
+    } catch (e) {
+        console.error('iFlyTek TTS failed:', e);
+    }
+};
+
 // ─── WAV Encoder ──────────────────────────────────────────────────────────
 function encodeWAV(samples, sampleRate) {
     const buffer = new ArrayBuffer(44 + samples.length * 2);
@@ -2982,13 +3018,11 @@ window.openPinyinToneModal = (syllable) => {
         let toneSyllable = applyTone(syllable, i);
         let repChar = (window.PINYIN_MAP && window.PINYIN_MAP[toneSyllable]) ? window.PINYIN_MAP[toneSyllable] : '字';
         
-        // Use SSML with explicit phoneme tag to force correct tone playback, 
-        // avoiding issues with multi-phonic (多音字) characters defaulting to wrong tones.
+        // iFLYTEK WebAPI TTS syntax for enforcing pronunciation: [=pinyin]character
         let phStr = syllable.replace('v', 'ü') + i;
-        let ssml = `<speak><phoneme alphabet="pinyin" ph="${phStr}">${repChar}</phoneme></speak>`;
-        let encodedSsml = ssml.replace(/"/g, '&quot;');
+        let iflytekText = `[=${phStr}]${repChar}`;
 
-        gridHtml += `<button class="tone-modal-btn" onclick="playPronunciation('${encodedSsml}', 0.85, VOICE_MAP.female)">
+        gridHtml += `<button class="tone-modal-btn" onclick="playIflytekPronunciation('${iflytekText}', 'xiaoyan')">
                         ${toneSyllable}
                         <span class="tone-num">Tone ${i}</span>
                      </button>`;

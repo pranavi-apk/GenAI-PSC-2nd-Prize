@@ -440,6 +440,70 @@ app.post('/api/tts', async (req, res) => {
     });
 });
 
+app.post('/api/iflytek-tts', async (req, res) => {
+    const { text, voice = 'xiaoyan' } = req.body;
+    if (!text) return res.status(400).json({ error: 'Missing text' });
+
+    const crypto = require('crypto');
+    const WebSocket = require('ws');
+    const ttsConfig = {
+        host: "tts-api-sg.xf-yun.com",
+        appid: process.env.ISE_APPID,
+        apiSecret: process.env.ISE_API_SECRET,
+        apiKey: process.env.ISE_API_KEY,
+        uri: "/v2/tts",
+    };
+
+    let date = new Date().toUTCString();
+    let signatureOrigin = `host: ${ttsConfig.host}\ndate: ${date}\nGET ${ttsConfig.uri} HTTP/1.1`;
+    let hmac = crypto.createHmac('sha256', ttsConfig.apiSecret);
+    let signatureSha = hmac.update(signatureOrigin).digest('base64');
+    let authorizationOrigin = `api_key="${ttsConfig.apiKey}", algorithm="hmac-sha256", headers="host date request-line", signature="${signatureSha}"`;
+    let authorization = Buffer.from(authorizationOrigin).toString('base64');
+    let wsUrl = `wss://${ttsConfig.host}${ttsConfig.uri}?authorization=${authorization}&date=${encodeURIComponent(date)}&host=${ttsConfig.host}`;
+
+    const ws = new WebSocket(wsUrl);
+    let audioChunks = [];
+
+    ws.on('open', () => {
+        let frame = {
+            "common": { "app_id": ttsConfig.appid },
+            "business": { "aue": "lame", "sfl": 1, "auf": "audio/L16;rate=16000", "vcn": voice, "tte": "utf8", "speed": 50, "volume": 50 },
+            "data": { "status": 2, "text": Buffer.from(text).toString('base64') }
+        };
+        ws.send(JSON.stringify(frame));
+    });
+
+    ws.on('message', (data) => {
+        try {
+            const parsed = JSON.parse(data);
+            if (parsed.code !== 0) {
+                console.error("iFlyTek TTS error:", parsed);
+                if (!res.headersSent) res.status(500).json({ error: 'iFlyTek TTS failed' });
+                ws.close();
+                return;
+            }
+            if (parsed.data && parsed.data.audio) {
+                audioChunks.push(parsed.data.audio); // it is base64 encoded
+            }
+            if (parsed.data && parsed.data.status === 2) {
+                const combinedBase64 = audioChunks.join('');
+                if (!res.headersSent) res.json({ audioContent: combinedBase64 });
+                ws.close();
+            }
+        } catch (e) {
+            console.error("iFlyTek TTS parse err:", e);
+            if (!res.headersSent) res.status(500).json({ error: 'Parse failed' });
+            ws.close();
+        }
+    });
+
+    ws.on('error', (err) => {
+        console.error("iFlyTek WS Error:", err);
+        if (!res.headersSent) res.status(500).json({ error: 'WS Error' });
+    });
+});
+
 // ─── REST: Generate Tabular Report ───────────────────────────────────────
 app.post('/api/generate-report', async (req, res) => {
     const { history, lang } = req.body;
