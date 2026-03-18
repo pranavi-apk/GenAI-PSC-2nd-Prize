@@ -842,13 +842,13 @@ window.playPronunciation = async (text, rate = 0.85, voice = STATE.voice) => {
     }
 };
 
-window.playIflytekPronunciation = async (text, voice = 'xiaoyan') => {
+window.playIflytekPronunciation = async (text, voice = 'xiaoyan', speed = 50, volume = 50) => {
     if (!text) return;
     if (currentTTSAudio) {
         currentTTSAudio.pause();
         currentTTSAudio = null;
     }
-    const cacheKey = `iflytek|${text}|${voice}`;
+    const cacheKey = `iflytek|${text}|${voice}|${speed}|${volume}`;
     try {
         let audioB64;
         if (ttsCache[cacheKey]) {
@@ -857,7 +857,7 @@ window.playIflytekPronunciation = async (text, voice = 'xiaoyan') => {
             const res = await fetch('/api/iflytek-tts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text, voice })
+                body: JSON.stringify({ text, voice, speed, volume })
             });
             const data = await res.json();
             if (!data.audioContent) throw new Error('No audio content returned');
@@ -3019,10 +3019,11 @@ window.openPinyinToneModal = (syllable) => {
         let repChar = (window.PINYIN_MAP && window.PINYIN_MAP[toneSyllable]) ? window.PINYIN_MAP[toneSyllable] : '字';
         
         // iFLYTEK WebAPI TTS syntax for enforcing pronunciation: [=pinyin]character
-        let phStr = syllable.replace('v', 'ü') + i;
+        // Use 'v' instead of 'ü' for the phonetic string as it's more standard for computer pinyin input.
+        let phStr = syllable + i;
         let iflytekText = `[=${phStr}]${repChar}`;
 
-        gridHtml += `<button class="tone-modal-btn" onclick="playIflytekPronunciation('${iflytekText}', 'xiaoyan')">
+        gridHtml += `<button class="tone-modal-btn" onclick="playIflytekPronunciation('${iflytekText}', 'xiaoyan', 35)">
                         ${toneSyllable}
                         <span class="tone-num">Tone ${i}</span>
                      </button>`;

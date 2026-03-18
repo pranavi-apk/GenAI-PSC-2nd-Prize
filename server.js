@@ -464,7 +464,7 @@ app.post('/api/tts', async (req, res) => {
 });
 
 app.post('/api/iflytek-tts', async (req, res) => {
-    const { text, voice = 'xiaoyan' } = req.body;
+    const { text, voice = 'xiaoyan', speed = 50, volume = 50 } = req.body;
     if (!text) return res.status(400).json({ error: 'Missing text' });
 
     const crypto = require('crypto');
@@ -491,7 +491,7 @@ app.post('/api/iflytek-tts', async (req, res) => {
     ws.on('open', () => {
         let frame = {
             "common": { "app_id": ttsConfig.appid },
-            "business": { "aue": "lame", "sfl": 1, "auf": "audio/L16;rate=16000", "vcn": voice, "tte": "utf8", "speed": 50, "volume": 50 },
+            "business": { "aue": "lame", "sfl": 1, "auf": "audio/L16;rate=16000", "vcn": voice, "tte": "utf8", "speed": parseInt(speed), "volume": parseInt(volume) },
             "data": { "status": 2, "text": Buffer.from(text).toString('base64') }
         };
         ws.send(JSON.stringify(frame));
